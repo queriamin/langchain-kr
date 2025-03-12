@@ -1,5 +1,5 @@
 import os
-from dotenv import load_dotenv
+from dotenv import load_dotenv # API 키를 환경변수에서 가져오기 위한 라이브러리, 처음에 인식 못해서 추가함
 import streamlit as st
 from langchain_core.output_parsers import StrOutputParser
 from langchain_core.messages import ChatMessage
@@ -7,7 +7,7 @@ from langchain_core.prompts import PromptTemplate
 from langchain_openai import ChatOpenAI
 from langchain_core.prompts import load_prompt
 
-load_dotenv()
+load_dotenv() # .env 파일을 읽어서 환경변수로 사용할 수 있게 함. 처음에 인식 못해서 추가함
 
 st.set_page_config(page_title="2025-1 정보융합특강 퀴즈 출제 봇 🦾", page_icon="🦾")
 st.title("2025-1 정보융합특강 퀴즈 출제 봇 🦾")
