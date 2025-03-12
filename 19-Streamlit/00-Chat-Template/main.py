@@ -1,3 +1,5 @@
+import os
+from dotenv import load_dotenv
 import streamlit as st
 from langchain_core.output_parsers import StrOutputParser
 from langchain_core.messages import ChatMessage
@@ -5,13 +7,13 @@ from langchain_core.prompts import PromptTemplate
 from langchain_openai import ChatOpenAI
 from langchain_core.prompts import load_prompt
 
+load_dotenv()
 
-st.set_page_config(page_title="나만의 ChatGPT 💬", page_icon="💬")
-st.title("나만의 ChatGPT 💬")
+st.set_page_config(page_title="2025-1 정보융합특강 퀴즈 출제 봇 🦾", page_icon="🦾")
+st.title("2025-1 정보융합특강 퀴즈 출제 봇 🦾")
 
 if "messages" not in st.session_state:
     st.session_state["messages"] = []
-
 
 def print_history():
     for msg in st.session_state["messages"]:
