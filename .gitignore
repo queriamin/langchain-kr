@@ -4,6 +4,7 @@
 # 파일
 .DS_Store
 *.env
+*.toml
 # *.db
 *.pdf
 *.pkl
