@@ -1,17 +1,23 @@
 import streamlit as st
 from utils import print_messages, StreamHandler
+from langchain.document_loaders import PyPDFLoader
+from langchain_text_splitters import RecursiveCharacterTextSplitter
+from langchain.vectorstores import FAISS
+from langchain.retrievers import BM25Retriever, EnsembleRetriever
 from langchain_core.messages import ChatMessage
-from langchain_openai import ChatOpenAI
+from langchain_openai import ChatOpenAI, OpenAIEmbeddings
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain_core.output_parsers import StrOutputParser
 from langchain_community.chat_message_histories import ChatMessageHistory
 from langchain_core.chat_history import BaseChatMessageHistory
+from langchain_core.runnables import RunnablePassthrough
 from langchain_core.runnables.history import RunnableWithMessageHistory
+from langchain import hub
 import os
 
 # 페이지 설정
-st.set_page_config(page_title="LLM Chat History", page_icon="😎")
-st.title("LLM Chat History 😎")
+st.set_page_config(page_title="논문 대신 읽어줌", page_icon="😎")
+st.title("논문 대신 읽어줌 😎")
 
 # API key 설정
 os.environ["OPENAI_API_KEY"] = st.secrets["OPENAI_API_KEY"] 
@@ -28,6 +34,10 @@ def get_session_history(session_ids:str) -> BaseChatMessageHistory:
         st.session_state["store"][session_ids] = ChatMessageHistory()
     return st.session_state["store"][session_ids]
 
+def format_docs(docs):
+    # 검색한 문서 결과를 하나의 문단으로 합쳐줍니다.
+    return "\n\n".join(doc.page_content for doc in docs)
+
 # 저장해주기
 if "store" not in st.session_state:
     st.session_state["store"] = dict()
@@ -41,6 +51,34 @@ with st.sidebar:
         st.session_state["messages"] = []
         st.session_state["store"] = dict()
         st.rerun()
+
+# PDF 파일 업로드
+uploaded_file = st.file_uploader("논문 PDF 파일을 업로드하세요", type=["pdf"])
+
+# PDF 파일이 업로드 되었을 때
+if uploaded_file is not None:
+    with st.spinner("PDF 처리 중..."):
+        # 파일 저장
+        file_path = f"temp_{uploaded_file.name}"
+        with open(file_path, "wb") as f:
+            f.write(uploaded_file.getbuffer())
+
+        # PDF 로드
+        loader = PyPDFLoader(file_path)
+        docs = loader.load()
+
+        # 텍스트 청크 분할
+        text_splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=50)
+        split_docs = text_splitter.split_documents(docs)
+
+        # 벡터스토어 생성
+        vectorstore = FAISS.from_documents(split_docs, OpenAIEmbeddings())
+        
+        # 벡터스토어를 검색기로 변환
+        retriever = vectorstore.as_retriever()
+
+        st.success("PDF 업로드 및 벡터 저장 완료!")
+
   
 # 사용자 입력을 받아서 대화를 생성하는 코드  
 if user_input := st.chat_input("메세지를 입력해주세용"):
@@ -48,15 +86,16 @@ if user_input := st.chat_input("메세지를 입력해주세용"):
     st.chat_message("user").write(f"{user_input}")
     st.session_state["messages"].append(ChatMessage(role="user", content=user_input))
     
+    
     # OpenAI Chat API를 사용하여 대화를 생성하는 코드
     with st.chat_message("assistant"):
         stream_handler = StreamHandler(st.empty())
         
         # 1. 모델 생성
-        llm = ChatOpenAI(streaming=True, callbacks=[stream_handler])
+        llm = ChatOpenAI(model_name="gpt-4o", temperature = 0, streaming=True, callbacks=[stream_handler])
         
         # 2. 대화 생성
-        prompt = ChatPromptTemplate.from_messages(
+        qa_prompt = ChatPromptTemplate.from_messages(
             [
                 (
                     "system",
@@ -68,7 +107,13 @@ if user_input := st.chat_input("메세지를 입력해주세용"):
             ]
         )
         
-        chain = prompt | llm
+        prompt = hub.pull("rlm/rag-prompt")
+          
+        chain = (
+            {"context": retriever | format_docs, "question": RunnablePassthrough()}
+            | qa_prompt 
+            | llm
+                 )
         
         # 3. 대화 생성, 메모리 기능 추가, 스트림 출력
         chain_with_memory = (
